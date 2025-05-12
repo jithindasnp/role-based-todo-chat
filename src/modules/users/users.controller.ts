@@ -112,4 +112,23 @@ export class UsersController {
       data: user,
     };
   }
+
+  @Get('employees/:managerId')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get employees under a manager' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Employees retrieved successfully',
+  })
+  async getEmployeesUnderManager(@Param('managerId') managerId: string) {
+    const employees = await this.usersService.listEmployeesUnderManager(
+      managerId,
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Employees retrieved successfully',
+      data: employees,
+    };
+  }
 }

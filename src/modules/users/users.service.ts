@@ -35,6 +35,7 @@ export class UsersService {
       where: whereCondition,
       skip: (page - 1) * limit,
       take: limit,
+      order: { created_at: 'DESC' },
     });
 
     const totalPages = Math.ceil(total / limit);
@@ -86,15 +87,25 @@ export class UsersService {
       user.email = updateUserDto.email;
     }
 
+    if (updateUserDto.password !== undefined) {
+      const hashedPassword = await bcrypt.hash(updateUserDto.password, 10);
+      user.password = hashedPassword;
+    }
+
     // Update only the fields provided in the DTO
     if (updateUserDto.name !== undefined) user.name = updateUserDto.name;
-    if (updateUserDto.password !== undefined)
-      user.password = updateUserDto.password;
     if (updateUserDto.role !== undefined) user.role = updateUserDto.role;
     if (updateUserDto.status !== undefined) user.status = updateUserDto.status;
     if (updateUserDto.department !== undefined)
       user.department = updateUserDto.department;
 
     return this.userRepository.save(user);
+  }
+
+  async listEmployeesUnderManager(managerId: string) {
+    const employees = await this.employeeManagerRepository.find({
+      where: { manager: { id: managerId } },
+    });
+    return employees;
   }
 }

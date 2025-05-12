@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -23,7 +24,9 @@ export class DepartmentsService {
   }
 
   async getAll() {
-    return await this.repo.find({ where: { isdeleted: false } });
+    return (await this.repo.find({ where: { isdeleted: false } })).sort(
+      (a, b) => a.name.localeCompare(b.name),
+    );
   }
 
   async getById(id: string) {
@@ -31,6 +34,9 @@ export class DepartmentsService {
   }
 
   async update(id: string, name: string) {
+    if (name?.length <= 0 || name === undefined || name === null) {
+      throw new BadRequestException('Name cannot be empty');
+    }
     const department = await this.repo.findOne({
       where: { id, isdeleted: false },
     });
