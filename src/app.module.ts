@@ -7,8 +7,6 @@ import { typeOrmConfig } from './config/typeorm.config';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './modules/users/users.module';
 import { DepartmentsModule } from './modules/departments/departments.module';
-import { ChatsModule } from './modules/chats/chats.module';
-import { ChatMembersModule } from './modules/chat-members/chat-members.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { APP_GUARD } from '@nestjs/core';
 import { RolesGuard } from './guards/roles.guard';
@@ -17,6 +15,7 @@ import { LoggerMiddleware } from './middleware/logger.middleware';
 import { AuthModule } from './modules/auth/auth.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { ExportModule } from './modules/export/export.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -39,13 +38,12 @@ import { ExportModule } from './modules/export/export.module';
     }),
     UsersModule,
     DepartmentsModule,
-    ChatsModule,
-    ChatMembersModule,
     MessagesModule,
     EmployeeManagerModule,
     AuthModule,
     TasksModule,
     ExportModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

@@ -42,6 +42,28 @@ export class AuthService {
     return user;
   }
 
+  async validateToken(token: string): Promise<User> {
+    try {
+      // Decode the token to extract the payload
+      const decodedToken = this.jwtService.decode(token) as { sub: string };
+      
+      // If the token can't be decoded, throw an unauthorized exception
+      if (!decodedToken || !decodedToken.sub) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      // Use the existing validateUser method to find and validate the user
+      return await this.validateUser(decodedToken);
+    } catch (error) {
+      // Handle different types of errors
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      // For other errors (like JWT decoding errors), throw an unauthorized exception
+      throw new UnauthorizedException('Invalid token');
+    }
+  }
+
   async generateToken(user: User): Promise<string> {
     const payload = { sub: user.id, email: user.email };
     return this.jwtService.sign(payload);
