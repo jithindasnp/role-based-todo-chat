@@ -37,4 +37,5 @@ export class User {
   @ManyToOne(() => User, (user) => user.updatedBy)
   @JoinColumn({ name: 'updated_by' })
   updatedBy: User;
+  
 }

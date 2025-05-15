@@ -13,13 +13,14 @@ import { WsJwtGuard } from 'src/guards/ws-jwt.guard';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { AuthService } from '../auth/auth.service';
 import { CreateChatDto } from './dto/create-chat.dto';
+import { AddChatMemberDto } from './dto/add-chat-member.dto';
 
 @WebSocketGateway({
   cors: {
     origin: process.env.SOCKET_ORIGIN,
     methods: process.env.SOCKET_METHODS,
-    credentials: true
-  }
+    credentials: true,
+  },
 })
 export class ChatGateway {
   @WebSocketServer()
@@ -34,8 +35,8 @@ export class ChatGateway {
   async handleConnection(client: Socket) {
     try {
       // Extract token from multiple sources
-      const token = 
-        client.handshake.auth.token || 
+      const token =
+        client.handshake.auth.token ||
         client.handshake.headers.authorization?.split(' ')[1];
 
       if (!token) {
@@ -44,17 +45,16 @@ export class ChatGateway {
 
       // Validate token
       const user = await this.authService.validateToken(token);
-      
+
       // Store user in socket session
       client.data.user = user;
-
       console.log(`User ${user.id} connected`);
     } catch (error) {
       console.error('Connection error:', error);
-      
+
       // Disconnect with specific error
-      client.emit('connection_error', { 
-        message: error.message 
+      client.emit('connection_error', {
+        message: error.message,
       });
       client.disconnect(true);
     }
@@ -81,13 +81,10 @@ export class ChatGateway {
       }
 
       // Create chat via service
-      const newChat = await this.chatService.createChat(
-        data, 
-        creator.id
-      );
+      const newChat = await this.chatService.createChat(data, creator.id);
 
       // Notify participants
-      data.memberIds.forEach(memberId => {
+      data.memberIds.forEach((memberId) => {
         const memberSocket = this.findSocketByUserId(memberId);
         if (memberSocket) {
           memberSocket.emit('new_chat_created', newChat);
@@ -99,18 +96,18 @@ export class ChatGateway {
 
       return newChat;
     } catch (error) {
-      console.log("Chat creation error:", error);
-      
+      console.log('Chat creation error:', error);
+
       client.emit('chat_creation_error', {
         success: false,
         message: error.message,
         // Additional error details
-      });  
+      });
     }
   }
 
   // Helper to find user's socket (simplified)
-  private findSocketByUserId(userId: string): Socket | null { 
+  private findSocketByUserId(userId: string): Socket | null {
     // In a real app, implement a proper socket mapping
     for (const [id, socket] of this.server.sockets.sockets) {
       if (socket.data.user?.id === userId) {
@@ -126,25 +123,86 @@ export class ChatGateway {
     @MessageBody() data: CreateMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const message = await this.chatService.saveMessage(data); 
-    this.server.to(data.chatId).emit('receive_message', message);
-  }
+    try {
+      // Save the message to the database
+      const message = await this.chatService.saveMessage(data);
 
+      
+      this.server.to(data.chatId).emit('receive_message', message);
+    } catch (error) {
+      console.log("send message error=>", error);      
+      // Handle errors
+      client.emit('chat_error', {
+        success: false,
+        message: error.message,
+      });
+    }
+  }
 
   @SubscribeMessage('join_chat')
   async handleJoinChat(
     @MessageBody() chatId: string,
     @ConnectedSocket() client: Socket,
   ) {
-    const user = client.data.user;
-    const isMember = await this.chatService.isChatMember(chatId, user.id);
-    if (!isMember) {
-      throw new UnauthorizedException('You are not a member of this chat');
-    }
-    client.join(chatId);
+    try {
+      const user = client.data.user;
+      const isMember = await this.chatService.isChatMember(chatId, user.id);
+      if (!isMember) {
+        client.emit('chat_error', {
+          success: false,
+          message: 'You are not a member of this chat',
+        });
+        return;
+      }
 
-    const chatHistory = await this.chatService.getChatHistory(chatId);
-    client.emit('chat_history', chatHistory);
+      // Join the chat room
+      client.join(chatId);
+      console.log(`User ${user.id} joined chat ${chatId}`); // Log for debugging
+
+      // Optionally, send the chat history to the user
+      const chatHistory = await this.chatService.getChatHistory(chatId);
+      client.emit('chat_history', chatHistory);
+    } catch (error) {
+      console.error('Error joining chat:', error.message); // Log the error
+      client.emit('chat_error', {
+        success: false,
+        message: 'Failed to join the chat',
+      });
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('add_member_to_chat')
+  async handleAddMemberToChat(
+    @MessageBody() data: AddChatMemberDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      const user = client.data.user;
+
+      const isMember = await this.chatService.isChatMember(
+        data.chatId,
+        user.sub,
+      );
+      if (!isMember) {
+        client.emit('chat_error', {
+          success: false,
+          message: 'You are not a member of this chat',
+        });
+        return;
+      }
+
+      await this.chatService.addMemberToChat(data.chatId, data.memberIds);
+      client.emit('chat_member_added');
+    } catch (error) {
+      console.log('Error adding members:', error);
+      
+      // Emit the error to the client 
+      client.emit('chat_error', {
+        success: false,
+        message: error.message,
+      });
+    }
   }
 
   @UseGuards(WsJwtGuard)
@@ -157,7 +215,7 @@ export class ChatGateway {
       const user = client.data.user;
 
       // Check if the user is a member of the chat
-      const isMember = await this.chatService.isChatMember(chatId, user.id);
+      const isMember = await this.chatService.isChatMember(chatId, user.sub);
       if (!isMember) {
         throw new UnauthorizedException('You are not a member of this chat');
       }

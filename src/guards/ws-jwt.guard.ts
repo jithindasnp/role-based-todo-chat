@@ -25,6 +25,7 @@ export class WsJwtGuard implements CanActivate {
       return true;
     } catch (error) {
       // Handle different types of authentication errors
+      console.log("error==>", error);      
       this.handleAuthenticationError(client, error);
       return false;
     }

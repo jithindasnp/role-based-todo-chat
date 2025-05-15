@@ -170,11 +170,11 @@ export class ChatService {
     const messageEntity = this.messageRepo.create({
       chat,
       sender,
-      receiver, 
+      receiver,
       content,
     });
-    
-    return this.messageRepo.save(messageEntity) ;
+
+    return this.messageRepo.save(messageEntity);
   }
 
   private async validateParticipants(
@@ -220,18 +220,50 @@ export class ChatService {
     return this.userRepo.find({ where: { role } });
   }
 
-  async isChatMember(chatId: string, userId: string): Promise<boolean> {
+  async isChatMember(chatId: string, userId: string): Promise<boolean> {       
     const member = await this.chatMemberRepo.findOne({
       where: { chat: { id: chatId }, user: { id: userId } },
+      relations: ['chat', 'user'],
     });
     return !!member;
   }
 
   async getChatHistory(chatId: string): Promise<Message[]> {
     return this.messageRepo.find({
-      where: { chat: { id: chatId } },
-      relations: ['sender'],
+      where: { chat: { id: chatId } }, 
       order: { sent_at: 'ASC' },
     });
+  }
+
+  async addMemberToChat(chatId: string, memberIds: string[]): Promise<void> {
+    // Find the chat
+    const chat = await this.chatRepo.findOne({ where: { id: chatId } });
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    // Find the users
+    const users = await this.userRepo.findBy({ id: In(memberIds) });
+    if (users.length !== memberIds.length) {
+      throw new NotFoundException('One or more users not found');
+    }
+
+    // Check if users are already members of the chat
+    const existingMembers = await this.chatMemberRepo.find({
+      where: { chat: { id: chatId }, user: { id: In(memberIds) } },
+    });
+
+    if (existingMembers.length > 0) {
+      const existingMemberIds = existingMembers.map(member => member.id);
+      throw new BadRequestException(`Users already in the chat: ${existingMemberIds.join(', ')}`);
+    }
+
+    // Create chat members
+    const chatMembers = users.map((user) =>
+      this.chatMemberRepo.create({ chat, user }),
+    );
+
+    // Save chat members
+    await this.chatMemberRepo.save(chatMembers);
   }
 }
